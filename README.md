@@ -1,6 +1,7 @@
 # d8wTool
-
 A desktop tool for viewing, exporting, importing, and converting **.d8w** and **.d8t** texture banks used in the game *Juiced*.
+![Preview](assets/preview.png)
+
 
 Built with **C++**, **wxWidgets**, and a custom DDS decoder, `d8wTool` is designed for modders, tinkerers, and reverse engineers working with the Juiced engine’s proprietary formats.
 
@@ -63,8 +64,4 @@ Built with **C++**, **wxWidgets**, and a custom DDS decoder, `d8wTool` is design
 - GUI & decoding help from **Sophie** (ChatGPT 🤖💖)
 - DDS decoding logic built from scratch (no external libs!)
 
----
 
-## 📸 Screenshots
-
-![Preview](assets/preview.png)
