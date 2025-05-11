@@ -2,38 +2,25 @@
 <CodeBlocks_layout_file>
 	<FileVersion major="1" minor="0" />
 	<ActiveTarget name="Release" />
-	<File name="main.cpp" open="1" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="-1" zoom_2="0">
+	<File name="include\DDSImage.h" open="1" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="459" topLine="12" />
+			<Cursor1 position="1176" topLine="23" />
+		</Cursor>
+	</File>
+	<File name="include\d8wTool.h" open="1" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="886" topLine="22" />
+		</Cursor>
+	</File>
+	<File name="include\d8w_parser.h" open="1" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="4392" topLine="53" />
 		</Cursor>
 	</File>
 	<File name="include\resource.h" open="0" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
 			<Cursor1 position="334" topLine="0" />
 		</Cursor>
-	</File>
-	<File name="include\d8wTool.h" open="1" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="-9" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="2765" topLine="20" />
-		</Cursor>
-	</File>
-	<File name="src\d8w_parser.cpp" open="1" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="13132" topLine="142" />
-		</Cursor>
-		<Folding>
-			<Collapse line="67" />
-			<Collapse line="69" />
-			<Collapse line="85" />
-			<Collapse line="89" />
-			<Collapse line="109" />
-			<Collapse line="111" />
-			<Collapse line="207" />
-			<Collapse line="294" />
-			<Collapse line="342" />
-			<Collapse line="422" />
-			<Collapse line="449" />
-		</Folding>
 	</File>
 	<File name="src\DDSImage.cpp" open="1" top="0" tabpos="7" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
@@ -45,24 +32,24 @@
 			<Collapse line="149" />
 		</Folding>
 	</File>
-	<File name="include\d8w_parser.h" open="1" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="4320" topLine="195" />
-		</Cursor>
-	</File>
 	<File name="src\icon.rc" open="1" top="0" tabpos="8" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="220" topLine="0" />
+			<Cursor1 position="238" topLine="0" />
 		</Cursor>
 	</File>
-	<File name="src\d8wTool.cpp" open="1" top="1" tabpos="4" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="src\d8w_parser.cpp" open="1" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="-2" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="1962" topLine="33" />
+			<Cursor1 position="20819" topLine="494" />
 		</Cursor>
 	</File>
-	<File name="include\DDSImage.h" open="1" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="src\d8wTool.cpp" open="1" top="1" tabpos="4" split="0" active="1" splitpos="0" zoom_1="-2" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="1176" topLine="23" />
+			<Cursor1 position="17695" topLine="431" />
+		</Cursor>
+	</File>
+	<File name="main.cpp" open="1" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="-1" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="5234" topLine="123" />
 		</Cursor>
 	</File>
 </CodeBlocks_layout_file>

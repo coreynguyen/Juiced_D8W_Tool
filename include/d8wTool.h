@@ -5,88 +5,90 @@
 #include <wx/splitter.h>
 #include <wx/treectrl.h>
 #include <wx/statbmp.h>
+
 #include "d8w_parser.h"
 #include "DDSImage.h"
 
-/* -------------------------------------------------------------
-   Tree-item payload
-   -------------------------------------------------------------*/
+/* Tree payload ─────────────────────────────────────────────── */
 struct TexItemData : public wxTreeItemData
 {
-    int pack;   // -2 root, -1 pack, >=0 texture
-    int tex;
-    TexItemData(int p=-2,int t=-1): pack(p), tex(t) {}
+    int bank;   // -2 = root .d8t  ,  -1 = .d8w  ,  -2/-1 combo unused
+    int pack;   // -1 for .d8w nodes
+    int tex;    // -1 for pack nodes
+    TexItemData(int b=-2,int p=-1,int t=-1):bank(b),pack(p),tex(t){}
 };
 
-/* -------------------------------------------------------------
-   App bootstrap
-   -------------------------------------------------------------*/
+/* Application bootstrap ────────────────────────────────────── */
 class d8wToolApp : public wxApp
 {
 public:  bool OnInit() override;
-         ~d8wToolApp() override = default;
+         ~d8wToolApp() override {}
 };
 
-/* -------------------------------------------------------------
-   Main window
-   -------------------------------------------------------------*/
+/* Main window ──────────────────────────────────────────────── */
 class MainFrame : public wxFrame
 {
 public:
     explicit MainFrame(const wxString& title);
 
-private:                                    /* widgets */
+private:                     /* widgets */
     wxSplitterWindow* splitter_;
     wxTreeCtrl*       tree_;
     wxPanel*          preview_;
     wxStaticBitmap*   thumb_;
     wxStaticText*     infoText_;
 
-                                            /* data */
-    juiced::D8WFile  bank_;
-    wxString         curW_, curT_;
-    wxBitmap         rawBmp_;               // original RGBA thumb
-    int              zoomPct_;              // 25-800 %
+                             /* data */
+    std::vector<juiced::D8WBank> banks_;   // one per discovered .d8w
+    std::vector<wxString>        wNames_;  // filenames (for tree label)
+    std::vector<BYTE>            bigT_;    // shared .d8t buffer
+    wxString                     bigTPath_;
 
-    static const int kZoomStep = 25, kZoomMin = 25, kZoomMax = 800;
+                             /* preview */
+    wxBitmap rawBmp_;
+    int      zoomPct_;
+    bool     showAlpha_;
+    enum { kZoomStep=25,kZoomMin=25,kZoomMax=800 };
 
-                                            /* build */
+                             /* helpers */
     void buildMenus();
     void buildAccelerators();
 
-                                            /* commands */
-    void OnOpen     (wxCommandEvent&);
-    void OnSave     (wxCommandEvent&);
-    void OnExit     (wxCommandEvent&);
+    /* menu handlers */
+    void OnOpen        (wxCommandEvent&);
+    void OnSave        (wxCommandEvent&);
+    void OnExit        (wxCommandEvent&);
 
-    void OnExport   (wxCommandEvent&);
-    void OnConvert  (wxCommandEvent&);
-    void OnImport   (wxCommandEvent&);
+    void OnExport      (wxCommandEvent&);
+    void OnConvert     (wxCommandEvent&);
+    void OnImport      (wxCommandEvent&);
 
-    void OnZoomIn   (wxCommandEvent&);
-    void OnZoomOut  (wxCommandEvent&);
+    void OnZoomIn      (wxCommandEvent&);
+    void OnZoomOut     (wxCommandEvent&);
+    void OnToggleAlpha (wxCommandEvent&);
 
-    void OnAbout    (wxCommandEvent&);
-    void OnSelChanged(wxTreeEvent&);
-    void OnTreeRClick(wxTreeEvent&);          // NEW
+    void OnAbout       (wxCommandEvent&);
 
-                                            /* helpers */
+    /* tree handlers */
+    void OnSelChanged  (wxTreeEvent&);
+    void OnTreeRClick  (wxTreeEvent&);
+
+    /* misc */
     void clearTree();
     void populateTree();
-    bool getSelection(int& pack,int& tex) const;
+    bool getSelection(int& bank,int& pack,int& tex) const;
 
-    void showPackInfo(int pack);
-    void showTextureInfo(int pack,int tex);
+    void showWInfo (int bank);
+    void showPackInfo (int bank,int pack);
+    void showTexInfo  (int bank,int pack,int tex);
 
     void applyZoom();
     void updateTitle();
 
-                                            /* IDs */
-    enum {
-        ID_Tree = wxID_HIGHEST+1,
-        ID_Export, ID_Convert, ID_Import,
-        ID_ZoomIn, ID_ZoomOut
-    };
+    /* command IDs */
+    enum { ID_Tree = wxID_HIGHEST+1,
+           ID_Export, ID_Convert, ID_Import,
+           ID_ZoomIn, ID_ZoomOut, ID_ToggleAlpha };
 
     wxDECLARE_EVENT_TABLE();
 };
