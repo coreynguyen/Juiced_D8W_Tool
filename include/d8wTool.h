@@ -6,6 +6,7 @@
 #include <wx/treectrl.h>
 #include <wx/statbmp.h>
 
+#include <memory>          // ← NEW
 #include "d8w_parser.h"
 #include "DDSImage.h"
 
@@ -39,7 +40,11 @@ private:                     /* widgets */
     wxStaticText*     infoText_;
 
                              /* data */
-    std::vector<juiced::D8WBank> banks_;   // one per discovered .d8w
+    //std::vector<juiced::D8WBank> banks_;   // one per discovered .d8w
+
+using BankPtr = std::unique_ptr<juiced::D8WBank>;
+std::vector<BankPtr> banks_;
+
     std::vector<wxString>        wNames_;  // filenames (for tree label)
     std::vector<BYTE>            bigT_;    // shared .d8t buffer
     wxString                     bigTPath_;
