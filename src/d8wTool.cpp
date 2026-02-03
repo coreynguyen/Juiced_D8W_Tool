@@ -163,40 +163,61 @@ static bool ieStartsWith(const wxString& a,const wxString& b)
 void MainFrame::populateTree()
 {
     clearTree();
-    if(bigTPath_.IsEmpty()){
+
+    /* ─── empty state ─────────────────────────────────────────────────── */
+    if (bigTPath_.IsEmpty()) {
         tree_->AddRoot(wxT("No file"));
         return;
     }
-    wxTreeItemId root = tree_->AddRoot(wxFileName(bigTPath_).GetFullName());
-    tree_->SetItemData(root,new TexItemData(-2,-1,-1));
 
-    for(size_t b=0;b<banks_.size();++b)
+    /* ─── root node = current .d8t file name ──────────────────────────── */
+    const wxTreeItemId root =
+        tree_->AddRoot(wxFileName(bigTPath_).GetFullName());
+    tree_->SetItemData(root, new TexItemData(-2, -1, -1));
+
+    /* ─── iterate over every loaded .d8w bank ─────────────────────────── */
+    for (size_t b = 0; b < banks_.size(); ++b)
     {
+        juiced::D8WBank* bank = banks_[b].get();          // stable heap ptr
+
         wxTreeItemId wNode = tree_->AppendItem(root, wNames_[b]);
-        tree_->SetItemData(wNode,new TexItemData((int)b,-1,-1));
+        tree_->SetItemData(wNode, new TexItemData(static_cast<int>(b), -1, -1));
 
-        for(size_t p=0;p<banks_[b].texturePackCount();++p)
+        /* texture packs (“TexSetN”) ------------------------------------ */
+        for (size_t p = 0; p < bank->texturePackCount(); ++p)
         {
-            wxString lbl; lbl.Printf(wxT("TexSet%u"),(unsigned)p);
-            wxTreeItemId packNode = tree_->AppendItem(wNode,lbl);
-            tree_->SetItemData(packNode,new TexItemData((int)b,(int)p,-1));
+            wxTreeItemId packNode = tree_->AppendItem(
+                wNode,
+                wxString::Format(wxT("TexSet%u"), static_cast<unsigned>(p)));
 
-            for(size_t t=0;t<banks_[b].textureCount(p);++t)
+            tree_->SetItemData(packNode,
+                               new TexItemData(static_cast<int>(b),
+                                               static_cast<int>(p), -1));
+
+            /* individual textures ------------------------------------- */
+            for (size_t t = 0; t < bank->textureCount(p); ++t)
             {
+                const juiced::TextureHdrEx& hEx =
+                    reinterpret_cast<const juiced::TextureHdrEx&>(
+                        bank->texture(p, t));
 
+                wxTreeItemId texNode = tree_->AppendItem(
+                    packNode,
+                    makeTexLabel(hEx,
+                                 static_cast<unsigned>(p),
+                                 static_cast<unsigned>(t)));
 
+                tree_->SetItemData(texNode,
+                                   new TexItemData(static_cast<int>(b),
+                                                   static_cast<int>(p),
+                                                   static_cast<int>(t)));
 
-                //wxString tl; tl.Printf(wxT("Tex%u%04u"),(unsigned)p,(unsigned)t);
-                //wxTreeItemId texNode = tree_->AppendItem(packNode,tl);
-                const juiced::TextureHdrEx& hEx = reinterpret_cast<const juiced::TextureHdrEx&>( banks_[b].texture(p,t));
-                wxTreeItemId texNode = tree_->AppendItem( packNode, makeTexLabel(hEx, (unsigned)p, (unsigned)t));
-
-                tree_->SetItemData(texNode,new TexItemData((int)b,(int)p,(int)t));
-                if(banks_[b].isTextureModified(p,t))
-                    tree_->SetItemTextColour(texNode,*wxRED);
+                if (bank->isTextureModified(p, t))
+                    tree_->SetItemTextColour(texNode, *wxRED);
             }
         }
     }
+
     tree_->Expand(root);
 }
 
@@ -210,84 +231,108 @@ bool MainFrame::getSelection(int& bank,int& pack,int& tex) const
 }
 
 /* ─── open .d8t ────────────────────────────────────────────── */
+/* ------------------------------------------------------------------------- */
+/*  MainFrame::OnOpen – load one .d8t + every matching .d8w                  */
+/* ------------------------------------------------------------------------- */
 void MainFrame::OnOpen(wxCommandEvent&)
 {
-    wxFileDialog dlg(this,wxT("Open .d8t"),
-                     wxEmptyString,wxEmptyString,
+    wxFileDialog dlg(this, wxT("Open .d8t"), wxEmptyString, wxEmptyString,
                      wxT("d8t files (*.d8t)|*.d8t"),
-                     wxFD_OPEN|wxFD_FILE_MUST_EXIST);
-    if(dlg.ShowModal()!=wxID_OK) return;
+                     wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+    if (dlg.ShowModal() != wxID_OK) return;
 
-    /* load big texture bank ------------------------------------------------*/
-    bigTPath_ = dlg.GetPath();
-    if(!fileToMem(bigTPath_,bigT_)){
-        wxMessageBox(wxT("Failed to load .d8t"),wxT("Error"),wxICON_ERROR);
-        bigT_.clear(); return;
+    /* ---- load the big bank (.d8t) -------------------------------------- */
+    bigTPath_ = dlg.GetPath();          // wxString → keeps UTF-8
+    if (!fileToMem(std::string(bigTPath_.mb_str()), bigT_)) {
+        wxMessageBox(wxT("Failed to load .d8t"), wxT("Error"), wxICON_ERROR);
+        bigT_.clear();
+        return;
     }
 
-    /* discover companion .d8w files ---------------------------------------*/
+    /* ---- find companion .d8w files ------------------------------------ */
     wxFileName fn(bigTPath_);
-    wxString folder = fn.GetPath();
-    wxString stem   = fn.GetName();          // "Angel SuperSpeedway"
-    wxArrayString found;
-    wxDir::GetAllFiles(folder,&found,wxT("*.d8w"),wxDIR_FILES);
-    banks_.clear(); wNames_.clear();
+    const wxString folder = fn.GetPath();               // same dir
+    const wxString stem   = fn.GetName();               // base name
 
-    for(size_t i=0;i<found.size();++i)
-        if(ieStartsWith(wxFileName(found[i]).GetName(),stem))
-        {
-            juiced::D8WBank b;
-            if(b.load(std::string(found[i].mb_str()), bigT_)){
-                banks_.push_back(b);
-                wNames_.push_back(wxFileName(found[i]).GetFullName());
-            }
+    wxArrayString found;
+    wxDir::GetAllFiles(folder, &found, wxT("*.d8w"), wxDIR_FILES);
+
+    banks_.clear();              // vector<unique_ptr<D8WBank>>
+    wNames_.clear();             // parallel list of nice names
+
+    for (size_t i = 0; i < found.size(); ++i) {
+        const wxString d8wPath = found[i];
+        if (!ieStartsWith(wxFileName(d8wPath).GetName(), stem)) continue;
+
+        auto bank = std::make_unique<juiced::D8WBank>();
+        if (bank->load(std::string(d8wPath.mb_str()), bigT_)) {
+            wNames_.push_back(wxFileName(d8wPath).GetFullName());
+            banks_.push_back(std::move(bank));          // stable heap ptr
         }
-    if(banks_.empty()){
-        wxMessageBox(wxT("No matching .d8w files found"),wxT("Error"),wxICON_ERROR);
-        bigT_.clear(); bigTPath_.Clear(); return;
     }
 
-    /* reset preview & fill tree -------------------------------------------*/
-    rawBmp_ = wxBitmap();   /* empty bitmap, no resource lookup */
+    if (banks_.empty()) {
+        wxMessageBox(wxT("No matching .d8w files found"),
+                     wxT("Error"), wxICON_ERROR);
+        bigT_.clear();
+        bigTPath_.Clear();
+        return;
+    }
 
-    zoomPct_=100; showAlpha_=true;
-    populateTree(); updateTitle();
+    /* ---- reset UI ------------------------------------------------------ */
+    rawBmp_.LoadFile(wxEmptyString);   // ensure empty preview
+    zoomPct_   = 100;
+    showAlpha_ = true;
+    populateTree();
+    updateTitle();
 }
 
-/* ─── save (writes .d8t once, every dirty .d8w) ────────────────────────── */
+/* ------------------------------------------------------------------------- */
+/*  MainFrame::OnSave – writes the shared .d8t once, every dirty .d8w       */
+/* ------------------------------------------------------------------------- */
 void MainFrame::OnSave(wxCommandEvent&)
 {
-    bool anyDirty=false;
-    for(size_t b=0;b<banks_.size();++b)
-        if(banks_[b].isDirty()) anyDirty=true;
-    if(!anyDirty){ wxBell(); return; }
+    // any dirty?
+    const bool anyDirty = std::any_of(banks_.begin(), banks_.end(),
+                                      [](const auto& up) { return up->isDirty(); });
+    if (!anyDirty) { wxBell(); return; }
 
-    /* write .d8t once via the *first* dirty bank ---------------------------*/
-    bool wroteBig=false;
-    for(size_t b=0;b<banks_.size();++b)
-        if(banks_[b].isDirty())
-        {
-            wxString wFull = wxFileName(bigTPath_).GetPathWithSep()
-                           + wNames_[b];
-            if(!banks_[b].save(std::string(wFull.mb_str()),
-                               wroteBig ? "" : std::string(bigTPath_.mb_str())))
-            {
-                wxMessageBox(wxT("Save failed"),wxT("Error"),wxICON_ERROR);
-                return;
-            }
-            wroteBig=true;
+    bool wroteBig = false;
+    for (size_t b = 0; b < banks_.size(); ++b) {
+        if (!banks_[b]->isDirty()) continue;
+
+        wxString wFull = wxFileName(bigTPath_).GetPathWithSep() + wNames_[b];
+        const std::string wPath (wFull.mb_str());
+        const std::string tPath (wroteBig ? "" : std::string(bigTPath_.mb_str()));
+
+        if (!banks_[b]->save(wPath, tPath)) {
+            wxMessageBox(wxT("Save failed"), wxT("Error"), wxICON_ERROR);
+            return;
         }
-    populateTree(); updateTitle();
+        wroteBig = true;                        // only first dirty bank writes .d8t
+    }
+
+    populateTree();
+    updateTitle();
 }
 
 /* ─── title bar ───────────────────────────────────────────── */
 void MainFrame::updateTitle()
 {
-    wxString t = wxT("Juiced – D8W Tool");
-    if(!bigTPath_.IsEmpty()) t += wxT("  [") + wxFileName(bigTPath_).GetFullName() + wxT(']');
-    for(size_t b=0;b<banks_.size();++b) if(banks_[b].isDirty()){ t += wxT(" *"); break; }
-    SetTitle(t);
+    wxString title = wxT("Juiced – D8W Tool");
+
+    if (!bigTPath_.IsEmpty())
+        title << wxT("  [") << wxFileName(bigTPath_).GetFullName() << wxT(']');
+
+    const bool dirty =
+        std::any_of(banks_.begin(), banks_.end(),
+                    [](const auto& up) { return up->isDirty(); });
+
+    if (dirty) title << wxT(" *");
+
+    SetTitle(title);
 }
+
 
 /* ─── tree selection changed ──────────────────────────────── */
 void MainFrame::OnSelChanged(wxTreeEvent&)
@@ -300,86 +345,101 @@ void MainFrame::OnSelChanged(wxTreeEvent&)
 }
 
 /* info helpers ────────────────────────────────────────────── */
+/* ------------------------------------------------------------------------- */
+/*  MainFrame::showWInfo – summary for an entire .d8w file                   */
+/* ------------------------------------------------------------------------- */
 void MainFrame::showWInfo(int b)
 {
-    zoomPct_=100; rawBmp_=MakeTransparent();
+    zoomPct_ = 100;
+
+    /* one transparent bitmap reused in both places */
+    rawBmp_ = MakeTransparent();
+    thumb_->SetBitmap(rawBmp_);
+
+    const auto* bank = banks_[b].get();        // ← dereference unique_ptr
     infoText_->SetLabel(wxString::Format(wxT("%s\nPacks: %zu"),
-                       wNames_[b].c_str(), banks_[b].texturePackCount()));
-    thumb_->SetBitmap(MakeTransparent()); preview_->Layout();
+                                         wNames_[b], bank->texturePackCount()));
+
+    preview_->Layout();
 }
-void MainFrame::showPackInfo(int b,int p)
+
+
+/* ------------------------------------------------------------------------- */
+/*  MainFrame::showPackInfo – display summary for one texture set            */
+/* ------------------------------------------------------------------------- */
+void MainFrame::showPackInfo(int b, int p)
 {
-    zoomPct_=100; rawBmp_=MakeTransparent();
+    zoomPct_ = 100;
+    rawBmp_  = MakeTransparent();
+
+    const auto* bank = banks_[b].get();
     infoText_->SetLabel(wxString::Format(wxT("%s / TexSet%u\nTextures: %zu"),
-                       wNames_[b].c_str(),p,banks_[b].textureCount(p)));
-    thumb_->SetBitmap(MakeTransparent()); preview_->Layout();
+                                         wNames_[b], p, bank->textureCount(p)));
+
+    thumb_->SetBitmap(rawBmp_);
+    preview_->Layout();
 }
+
 
 /* helper to pad to 18 chars */
 static wxString col(const wxString& s0)
 {
-    wxString s(s0); while(s.length()<18) s+=wxT(' ');
-    if(s.length()>18) s.Truncate(18); return s;
+    wxString s(s0);
+    while (s.length() < 18)  s += wxT(' ');
+    if    (s.length() > 18)  s.Truncate(18);
+    return s;
 }
 
 
-
-void MainFrame::showTexInfo(int bank,int pack,int tex)
+/* ------------------------------------------------------------------------- */
+/*  MainFrame::showTexInfo – detailed info + thumbnail for one texture       */
+/* ------------------------------------------------------------------------- */
+void MainFrame::showTexInfo(int bankIdx, int packIdx, int texIdx)
 {
-    /* obtain full header (we stored TextureHdrEx internally) */
+    const auto* bank = banks_[bankIdx].get();
+
+    /* obtain full header (TextureHdrEx stored internally) */
     const juiced::TextureHdrEx& h =
         reinterpret_cast<const juiced::TextureHdrEx&>(
-            banks_[bank].texture(pack,tex));
+            bank->texture(packIdx, texIdx));
 
-    /* --- Four-character code → readable text -------------------- */
+    /* four‑character code → readable text */
     wxString fcc;
-    if (h.type == 0x15)                       fcc = wxT("ARGB8888");
-    else
-    {
-        char cc[5] =
-        {   char( h.type        & 0xFF),
+    if (h.type == 0x15) {
+        fcc = wxT("ARGB8888");
+    } else {
+        char cc[5] = {
+            char( h.type        & 0xFF),
             char((h.type >>  8) & 0xFF),
             char((h.type >> 16) & 0xFF),
             char((h.type >> 24) & 0xFF), 0 };
         fcc = wxString::FromUTF8(cc);
     }
 
-    /* helper that pads / truncates to 18 chars */
-    const wxString c0 = col(wxString::Format(wxT("Tex%04d"), tex));
-    const wxString c1 = col(wxString::Format(wxT("%ux%u"),  h.width,  h.height));
-    const wxString c2 = col(wxString::Format(wxT("Size:%u"),h.size));
-
-    const wxString c3 = col(wxString::Format(wxT("Type:%s"),fcc.c_str()));
-    const wxString c4 = col(wxString::Format(wxT("Mips:%u"),h.mipCnt));
-    const wxString c5 = col(wxString::Format(wxT("u07:%u"), h.unk07));
-
-    const wxString c6 = col(wxString::Format(wxT("u08:%u"),h.unk08));
-    const wxString c7 = col(wxString::Format(wxT("u09:%u"),h.unk09));
-    const wxString c8 = col(wxString::Format(wxT("u10:%u"),h.unk10));
-
-    const wxString c9  = col(wxString::Format(wxT("u11:%u"),  h.unk11));
-    const wxString c10 = col(wxString::Format(wxT("u12:%.2f"),h.unk12));
-    const wxString c11 = col(wxString::Format(wxT("u13:%.2f"),h.unk13));
-
-    /* NEW  ➜  absolute offset inside the big .d8t (hex) */
-    const wxString c12 = col(wxString::Format(wxT("Off:0x%08X"),h.fileOff));
-
-    /* assemble 4 rows × 3 columns (pad helper keeps width neat) */
+    /* 4×3 grid + 5‑th line with absolute offset */
     wxString info =
-        c0 + c1 + c2 + wxT("\n") +
-        c3 + c4 + c5 + wxT("\n") +
-        c6 + c7 + c8 + wxT("\n") +
-        c9 + c10+ c11 + wxT("\n") +   // existing four rows
-        c12;                          // address shown on a 5-th short row
+          col(wxString::Format(wxT("Tex%04d"), texIdx))
+        + col(wxString::Format(wxT("%ux%u"),  h.width,  h.height))
+        + col(wxString::Format(wxT("Size:%u"),h.size))           + wxT("\n")
+        + col(wxString::Format(wxT("Type:%s"),fcc))
+        + col(wxString::Format(wxT("Mips:%u"),h.mipCnt))
+        + col(wxString::Format(wxT("u07:%u"), h.unk07))          + wxT("\n")
+        + col(wxString::Format(wxT("u08:%u"),h.unk08))
+        + col(wxString::Format(wxT("u09:%u"),h.unk09))
+        + col(wxString::Format(wxT("u10:%u"),h.unk10))           + wxT("\n")
+        + col(wxString::Format(wxT("u11:%u"), h.unk11))
+        + col(wxString::Format(wxT("u12:%.2f"),h.unk12))
+        + col(wxString::Format(wxT("u13:%.2f"),h.unk13))         + wxT("\n")
+        + col(wxString::Format(wxT("Off:0x%08X"),h.fileOff));
 
     infoText_->SetLabel(info);
 
-    /* --- thumbnail ------------------------------------------------------- */
-    rawBmp_ = wxBitmap();          // reset (no resource lookup!)
+    /* thumbnail ----------------------------------------------------------- */
+    rawBmp_.LoadFile(wxEmptyString);   // clear, no resource lookup
     zoomPct_ = 100;
 
     wxString tmp = TempDDS();
-    if (banks_[bank].convertTexture(pack, tex, std::string(tmp.mb_str())))
+    if (bank->convertTexture(packIdx, texIdx, std::string(tmp.mb_str())))
     {
         DDSImage img;
         if (img.LoadFromFile(tmp))
@@ -392,51 +452,101 @@ void MainFrame::showTexInfo(int bank,int pack,int tex)
     applyZoom();
 }
 
-/* ─── export / convert / import (bank aware) ───────────────── */
+
+/* ------------------------------------------------------------------------- */
+/*  Export / Convert / Import – bank‑aware wrappers                          */
+/* ------------------------------------------------------------------------- */
 void MainFrame::OnExport(wxCommandEvent&)
 {
-    int b,p,t; if(!getSelection(b,p,t)) return;
-    if(t>=0){
-        wxFileDialog fd(this,wxT("Export .ddt"),wxEmptyString,wxEmptyString,
-                        wxT("*.ddt"),wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
-        if(fd.ShowModal()==wxID_OK)
-            banks_[b].exportTexture(p,t,std::string(fd.GetPath().mb_str()));
-    }else if(p>=0){
-        wxDirDialog dd(this,wxT("Folder for .ddt set"));
-        if(dd.ShowModal()==wxID_OK)
-            banks_[b].exportTextureSet(p,std::string(dd.GetPath().mb_str()));
+    int b, p, t; if (!getSelection(b, p, t)) return;
+
+    auto* bank = banks_[b].get();
+    if (t >= 0) {                                   // single texture
+        wxFileDialog fd(this, wxT("Export .ddt"), wxEmptyString, wxEmptyString,
+                        wxT("*.ddt"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (fd.ShowModal() == wxID_OK)
+            bank->exportTexture(p, t, std::string(fd.GetPath().mb_str()));
+    }
+    else if (p >= 0) {                              // whole set
+        wxDirDialog dd(this, wxT("Folder for .ddt set"));
+        if (dd.ShowModal() == wxID_OK)
+            bank->exportTextureSet(p, std::string(dd.GetPath().mb_str()));
     }
 }
+
 void MainFrame::OnConvert(wxCommandEvent&)
 {
-    int b,p,t; if(!getSelection(b,p,t)) return;
-    if(t>=0){
-        wxFileDialog fd(this,wxT("Export .dds"),wxEmptyString,wxEmptyString,
-                        wxT("*.dds"),wxFD_SAVE|wxFD_OVERWRITE_PROMPT);
-        if(fd.ShowModal()==wxID_OK)
-            banks_[b].convertTexture(p,t,std::string(fd.GetPath().mb_str()));
-    }else if(p>=0){
-        wxDirDialog dd(this,wxT("Folder for .dds set"));
-        if(dd.ShowModal()==wxID_OK)
-            banks_[b].convertTextureSet(p,std::string(dd.GetPath().mb_str()));
+    int b, p, t; if (!getSelection(b, p, t)) return;
+
+    auto* bank = banks_[b].get();
+    if (t >= 0) {
+        wxFileDialog fd(this, wxT("Export .dds"), wxEmptyString, wxEmptyString,
+                        wxT("*.dds"), wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+        if (fd.ShowModal() == wxID_OK)
+            bank->convertTexture(p, t, std::string(fd.GetPath().mb_str()));
+    }
+    else if (p >= 0) {
+        wxDirDialog dd(this, wxT("Folder for .dds set"));
+        if (dd.ShowModal() == wxID_OK)
+            bank->convertTextureSet(p, std::string(dd.GetPath().mb_str()));
     }
 }
+
 void MainFrame::OnImport(wxCommandEvent&)
 {
-    int b,p,t; if(!getSelection(b,p,t)) return;
-    if(t>=0){
-        wxFileDialog fd(this,wxT("Import .ddt"),wxEmptyString,wxEmptyString,
-                        wxT("*.ddt"),wxFD_OPEN|wxFD_FILE_MUST_EXIST);
-        if(fd.ShowModal()==wxID_OK &&
-           banks_[b].importTexture(p,t,std::string(fd.GetPath().mb_str())))
-            populateTree();
-    }else if(p>=0){
-        wxDirDialog dd(this,wxT("Pick folder with .ddt"));
-        if(dd.ShowModal()==wxID_OK &&
-           banks_[b].importTextureSet(p,std::string(dd.GetPath().mb_str())))
-            populateTree();
+    int b, p, t; if (!getSelection(b, p, t)) return;
+    auto* bank = banks_[b].get();
+
+    wxBusyCursor wait;
+    bool ok = false;
+
+    /* -------- single texture -------- */
+    if (t >= 0)
+    {
+        wxFileDialog fd(this, wxT("Import texture"),
+                        wxEmptyString, wxEmptyString,
+                        wxT("All supported (*.ddt;*.dds)|*.ddt;*.dds|")
+                        wxT("DDT files (*.ddt)|*.ddt|")
+                        wxT("DDS files (*.dds)|*.dds|")
+                        wxT("All files (*.*)|*.*"),
+                        wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+        if (fd.ShowModal() == wxID_OK)
+            ok = bank->importTexture(p, t,
+                    std::string(fd.GetPath().mb_str()));
     }
+    /* -------- whole set -------- */
+    else if (p >= 0)
+    {
+        wxDirDialog dd(this, wxT("Pick folder with .ddt / .dds"));
+        if (dd.ShowModal() == wxID_OK)
+            ok = bank->importTextureSet(
+                    p, std::string(dd.GetPath().mb_str()));
+    }
+
+    if (!ok)
+    {
+        wxMessageBox(wxString::FromUTF8(gLastErr.c_str()),
+                     wxT("Import failed"),
+                     wxOK | wxICON_ERROR);
+        return;
+    }
+
+    /* remember current tree item, repopulate, reselect */
+    const wxTreeItemId remember = tree_->GetSelection();
+
+    populateTree();
+    updateTitle();
+
+    if (remember.IsOk()) tree_->SelectItem(remember);
+
+    /* refresh right pane */
+    if (t >= 0)      showTexInfo (b, p, t);
+    else if (p >= 0) showPackInfo(b, p);
 }
+
+
+
 
 /* ─── zoom / alpha helpers ────────────────────────────────── */
 void MainFrame::applyZoom()
