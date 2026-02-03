@@ -5629,14 +5629,16 @@
 	<wx/wx.h>
 	<vector>
 
-1746918399 source:e:\backup\mycloud4100\coding\cpp\projects\d8wtool\src\d8w_parser.cpp
+1747187041 source:e:\backup\mycloud4100\coding\cpp\projects\d8wtool\src\d8w_parser.cpp
 	"d8w_parser.h"
 	<windows.h>
 	<direct.h>
 	<algorithm>
 	<cstring>
+	<map>
+	<cstdarg>
 
-1746918399 e:\backup\mycloud4100\coding\cpp\projects\d8wtool\include\d8w_parser.h
+1747188075 e:\backup\mycloud4100\coding\cpp\projects\d8wtool\include\d8w_parser.h
 	<windows.h>
 	<string>
 	<vector>
@@ -5657,11 +5659,12 @@
 	"d8w_parser.h"
 	"resource.h"
 
-1746918961 e:\backup\mycloud4100\coding\cpp\projects\d8wtool\include\d8wtool.h
+1747188314 e:\backup\mycloud4100\coding\cpp\projects\d8wtool\include\d8wtool.h
 	<wx/wx.h>
 	<wx/splitter.h>
 	<wx/treectrl.h>
 	<wx/statbmp.h>
+	<memory>
 	"d8w_parser.h"
 	"DDSImage.h"
 
@@ -5706,7 +5709,7 @@
 
 1742249666 c:\progra~2\codeblocks\wxwidgets\include\wx\qt\treectrl.h
 
-1746921665 source:e:\backup\mycloud4100\coding\cpp\projects\d8wtool\src\d8wtool.cpp
+1747101225 source:e:\backup\mycloud4100\coding\cpp\projects\d8wtool\src\d8wtool.cpp
 	"d8wTool.h"
 	<fstream>
 	<algorithm>
